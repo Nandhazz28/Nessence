@@ -28,7 +28,7 @@ services:
       - key: ALLOWED_ORIGINS
         value: https://nessence.vercel.app,http://localhost:5173
       - key: COOKIE_SAMESITE
-        sync: false
+        value: none
       - key: TRUST_PROXY_HOPS
         value: "1"
 
