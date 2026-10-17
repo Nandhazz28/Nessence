@@ -60,6 +60,8 @@ const productSchema = new mongoose.Schema(
       sizes: [String],
       inStock: { type: Boolean, default: false },
     },
+    // Product images: array of imageSchema objects. Default to empty array to avoid undefined reads.
+    images: { type: [imageSchema], default: [] },
     colorOptions: [{ name: String, hex: String, _id: false }],
     ratingAvg: { type: Number, default: 0, min: 0, max: 5 },
     ratingCount: { type: Number, default: 0, min: 0 },
