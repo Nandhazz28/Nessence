@@ -16,13 +16,14 @@ const Customers = page('Customers', () => import('./pages/People.jsx')); const C
 const Coupons = page('Coupons', () => import('./pages/Engage.jsx')); const Reviews = page('Reviews', () => import('./pages/Engage.jsx'));
 const Newsletter = page('Newsletter', () => import('./pages/Engage.jsx')); const Messages = page('Messages', () => import('./pages/Engage.jsx'));
 const Journal = page('Journal', () => import('./pages/Content.jsx')); const ArticleForm = page('ArticleForm', () => import('./pages/Content.jsx'));
+const Banners = page('Banners', () => import('./pages/Banners.jsx'));
 const Pages = page('Pages', () => import('./pages/Content.jsx')); const Settings = page('Settings', () => import('./pages/Content.jsx'));
 
 const NAV = [
   ['Overview', [['Dashboard', '/admin', 'dashboard:read', true], ['Analytics', '/admin/analytics', 'analytics:read']]],
   ['Catalog', [['Products', '/admin/products', 'products:read'], ['Categories', '/admin/categories', 'products:read'], ['Collections', '/admin/collections', 'products:read'], ['Inventory', '/admin/inventory', 'inventory:read']]],
   ['Sales', [['Orders', '/admin/orders', 'orders:read'], ['Returns', '/admin/returns', 'returns:manage'], ['Refunds', '/admin/refunds', 'refunds:process'], ['Customers', '/admin/customers', 'customers:read'], ['Coupons', '/admin/coupons', 'coupons:write'], ['Reviews', '/admin/reviews', 'reviews:moderate']]],
-  ['Content', [['Journal', '/admin/journal', 'content:write'], ['Pages', '/admin/content', 'content:write'], ['Newsletter', '/admin/newsletter', 'newsletter:read'], ['Messages', '/admin/contact-messages', 'messages:read']]],
+  ['Content', [['Journal', '/admin/journal', 'content:write'], ['Banners', '/admin/banners', 'content:write'], ['Pages', '/admin/content', 'content:write'], ['Newsletter', '/admin/newsletter', 'newsletter:read'], ['Messages', '/admin/contact-messages', 'messages:read']]],
   ['System', [['Staff', '/admin/staff', 'staff:manage'], ['Settings', '/admin/settings', 'settings:manage'], ['Audit log', '/admin/audit-logs', 'audit:read']]],
 ];
 
@@ -123,6 +124,7 @@ export default function AdminApp() {
         <Route path="journal" element={guard('content:write', <Journal />)} />
         <Route path="journal/new" element={guard('content:write', <ArticleForm />)} />
         <Route path="journal/:id" element={guard('content:write', <ArticleForm />)} />
+        <Route path="banners" element={guard('content:write', <Banners />)} />
         <Route path="content" element={guard('content:write', <Pages />)} />
         <Route path="newsletter" element={guard('newsletter:read', <Newsletter />)} />
         <Route path="contact-messages" element={guard('messages:read', <Messages />)} />

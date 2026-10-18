@@ -14,6 +14,8 @@ function classify(err) {
   if (err instanceof BrevoTimeoutError) return 'TIMEOUT';
   const status = err instanceof BrevoError ? err.statusCode : undefined;
   if (status === 401 || status === 403) return 'PROVIDER_AUTH'; 
+  if (status === 429) return 'RATE_LIMITED';
+  if (status >= 500) return 'PROVIDER_UNAVAILABLE';
   if (status) return 'PROVIDER_REJECTED';
   return 'NETWORK_ERROR';
 }

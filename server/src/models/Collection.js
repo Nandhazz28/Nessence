@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { bannerSchema } from '../utils/bannerSchema.js';
 
 const collectionSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
@@ -9,6 +10,7 @@ const collectionSchema = new mongoose.Schema({
   featured: { type: Boolean, default: false },
   active: { type: Boolean, default: true, index: true },
   sortOrder: { type: Number, default: 0 },
+  banner: bannerSchema,
 }, { timestamps: true });
 
 export const Collection = mongoose.model('Collection', collectionSchema);

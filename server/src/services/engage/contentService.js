@@ -10,21 +10,9 @@ export const contentUpdate = z.object({ title: z.string().trim().min(2).max(140)
   data: z.object({ items: z.array(z.object({ q: z.string().trim().min(3).max(200), a: z.string().trim().min(3).max(2000) }).strict()).max(50) }).strict().optional() }).strict();
 
 const host = (re) => z.string().trim().url().refine((u) => u.startsWith('https://') && re.test(new URL(u).hostname), 'Use a full https:// link on the platform’s own domain');
-const bannerLink = z.string().trim().max(500).optional().or(z.literal('')).refine((v) => !v || /^https?:\/\//.test(v) || v.startsWith('/'), 'Use a full https:// link or a storefront path like /women');
-const bannerImage = z.object({
-  url: z.string().refine(isAllowedImageUrl, 'Upload images through the image uploader'),
-  alt: z.string().trim().min(1).max(140).optional().or(z.literal('')),
-  link: bannerLink,
-}).strict();
-const bannersSchema = z.object({
-  hero: bannerImage.optional().nullable(),
-  collections: z.record(z.string().min(1).max(100), bannerImage).optional().default({}),
-  featuredSections: z.record(z.string().min(1).max(100), bannerImage).optional().default({}),
-}).strict().optional();
 export const settingsBody = z.object({
   storeName: z.string().trim().min(2).max(60), supportEmail: z.string().trim().toLowerCase().email().optional().or(z.literal('')), supportPhone: z.string().trim().max(30).optional().or(z.literal('')),
   social: z.object({ instagram: host(/(^|\.)instagram\.com$/).optional().or(z.literal('')), facebook: host(/(^|\.)facebook\.com$/).optional().or(z.literal('')), youtube: host(/(^|\.)youtube\.com$/).optional().or(z.literal('')) }).strict().default({}),
-  banners: bannersSchema.default({}),
 }).strict();
 
 export async function getPage(key) {
@@ -38,25 +26,13 @@ export async function updatePage(key, body, staff) {
   if (!CONTENT_KEYS.includes(key)) throw ApiError.notFound('PAGE_NOT_FOUND', 'Unknown page');
   return SiteContent.findOneAndUpdate({ key }, { $set: { ...body, updatedBy: staff._id } }, { new: true, upsert: true, runValidators: true });
 }
-const DEFAULT_SETTINGS = { storeName: 'Nessence', supportEmail: '', supportPhone: '', social: {}, banners: { hero: null, collections: {}, featuredSections: {} } };
+const DEFAULT_SETTINGS = { storeName: 'Nessence', supportEmail: '', supportPhone: '', social: {} };
 export async function getSettings() { const s = await SiteContent.findOne({ key: 'settings' }).lean(); return { ...DEFAULT_SETTINGS, ...(s?.data ?? {}) }; }
 export async function publicSettings() {
   const s = await getSettings();
-  const social = Object.fromEntries(Object.entries(s.social ?? {}).filter(([, v]) => v));
-  const banners = s.banners ?? { hero: null, collections: {}, featuredSections: {} };
-  return {
-    storeName: s.storeName,
-    supportEmail: s.supportEmail || null,
-    supportPhone: s.supportPhone || null,
-    social,
-    banners: {
-      hero: banners.hero ? { url: banners.hero.url, alt: banners.hero.alt || '', link: banners.hero.link || null } : null,
-      collections: Object.fromEntries(Object.entries(banners.collections ?? {}).filter(([, v]) => v?.url).map(([k, v]) => [k, { url: v.url, alt: v.alt || '', link: v.link || null }])),
-      featuredSections: Object.fromEntries(Object.entries(banners.featuredSections ?? {}).filter(([, v]) => v?.url).map(([k, v]) => [k, { url: v.url, alt: v.alt || '', link: v.link || null }])),
-    },
-  };
+  return { storeName: s.storeName, supportEmail: s.supportEmail || null, supportPhone: s.supportPhone || null, social: Object.fromEntries(Object.entries(s.social ?? {}).filter(([, v]) => v)) }; // only configured links are exposed
 }
-export const saveSettings = (data, staff) => SiteContent.findOneAndUpdate({ key: 'settings' }, { $set: { title: 'Settings', data: { ...DEFAULT_SETTINGS, ...data, banners: { hero: data?.banners?.hero ?? null, collections: data?.banners?.collections ?? {}, featuredSections: data?.banners?.featuredSections ?? {} } }, updatedBy: staff._id } }, { new: true, upsert: true });
+export const saveSettings = (data, staff) => SiteContent.findOneAndUpdate({ key: 'settings' }, { $set: { title: 'Settings', data, updatedBy: staff._id } }, { new: true, upsert: true });
 
 export const articleBody = z.object({
   title: z.string().trim().min(3).max(140), slug: z.string().regex(/^[a-z0-9-]{2,90}$/).optional(), excerpt: z.string().trim().min(10).max(300),
@@ -64,7 +40,7 @@ export const articleBody = z.object({
   content: z.string().trim().min(20).max(30000), author: z.string().trim().min(2).max(80), tags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
   status: z.enum(['draft', 'published']).default('draft'), seo: z.object({ title: z.string().max(70).optional(), description: z.string().max(160).optional() }).optional(),
 }).strict();
-const pubView = (a, full) => ({ id: a._id, title: a.title, slug: a.slug, excerpt: a.excerpt, coverImage: a.coverImage?.url ? presentImage(a.coverImage, 'cover') : a.coverImage, author: a.author, tags: a.tags ?? [], status: a.status, ...(full ? { content: a.content, seo: a.seo ?? {} } : {}) });
+const pubView = (a, full) => ({ id: a._id, title: a.title, slug: a.slug, excerpt: a.excerpt, coverImage: a.coverImage?.url ? presentImage(a.coverImage, 'cover') : a.coverImage, author: a.author, tags: a.tags, publishedAt: a.publishedAt, ...(full ? { content: a.content, seo: a.seo } : {}) });
 export async function listArticles({ page, limit, tag }) {
   const f = { status: 'published', ...(tag ? { tags: tag } : {}) };
   const [rows, total] = await Promise.all([Article.find(f).sort({ publishedAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), Article.countDocuments(f)]);
@@ -92,7 +68,7 @@ export async function updateArticle(id, b) {
   const cover = rest.coverImage ? (await media.resolveImages([rest.coverImage], { existing: before ? [before] : [] }))[0] : undefined;
   a.set(cover ? { ...rest, coverImage: cover } : rest); await a.save();
   if (cover) await media.markAttached([cover]);
-  if (before && cover) await media.release(media.removedBetween([before], [cover]));
+  if (before && cover) await media.release(media.removedBetween([before], [cover])); // old cover goes only after the save succeeded; omitting coverImage leaves it attached
   return a;
 }
 export async function deleteArticle(id) {

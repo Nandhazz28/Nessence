@@ -16,6 +16,7 @@ import * as news from "../services/engage/newsletterService.js";
 import * as contact from "../services/engage/contactService.js";
 import * as content from "../services/engage/contentService.js";
 import { track } from "../services/engage/trackOrder.js";
+import { banners } from "../services/engage/bannerService.js";
 
 const oid = z.string().regex(/^[a-f0-9]{24}$/, "Invalid id");
 const slug = z.object({ slug: z.string().regex(/^[a-z0-9-]{1,100}$/) });
@@ -256,6 +257,11 @@ engage.get(
     res.set("Cache-Control", "public, max-age=60");
     ok(res, await content.getPage(req.params.key));
   }),
+);
+// Not cached (the /api default is no-store) so a saved banner shows on the next page load.
+engage.get(
+  "/banners",
+  h(async (_req, res) => ok(res, await banners.publicBanners())),
 );
 engage.get(
   "/settings/public",

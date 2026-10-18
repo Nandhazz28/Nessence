@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 export const MEDIA_STATUSES = ["pending", "active", "delete_pending"];
-export const MEDIA_PURPOSES = ["product", "article"];
+export const MEDIA_PURPOSES = ["product", "article", "banner"];
 
 const mediaAssetSchema = new mongoose.Schema(
   {

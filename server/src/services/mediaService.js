@@ -11,6 +11,9 @@ import { Product } from "../models/Product.js";
 import { Article } from "../models/Article.js";
 import { Order } from "../models/Order.js";
 import { ReturnRequest } from "../models/ReturnRequest.js";
+import { Category } from "../models/Category.js";
+import { Collection } from "../models/Collection.js";
+import { SiteContent } from "../models/SiteContent.js";
 
 const MIN = 60_000;
 export const UPLOAD_GRACE_MS = 15 * MIN;
@@ -25,7 +28,16 @@ const keyOf = (i) => i?.publicId ?? i?.url;
 
 export function createMediaService({
   storage = defaultStorage,
-  models = { MediaAsset, Product, Article, Order, ReturnRequest },
+  models = {
+    MediaAsset,
+    Product,
+    Article,
+    Order,
+    ReturnRequest,
+    Category,
+    Collection,
+    SiteContent,
+  },
   log = logger,
   now = () => new Date(),
 } = {}) {
@@ -35,6 +47,9 @@ export function createMediaService({
     Article: A,
     Order: O,
     ReturnRequest: R,
+    Category: Cat,
+    Collection: Col,
+    SiteContent: Site,
   } = models;
 
   async function isReferenced(ref) {
@@ -47,6 +62,9 @@ export function createMediaService({
       [A, by("coverImage")],
       [O, by("items.image")],
       [R, by("items.image")],
+      [Cat, by("banner")],
+      [Col, by("banner")],
+      [Site, by("data")], // site-wide banner slots (SiteContent key "banner:<slot>")
     ]) {
       if (await Model.exists(filter)) return true;
     }

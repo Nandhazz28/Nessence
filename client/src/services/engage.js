@@ -5,6 +5,10 @@ export const contentApi = {
   page: (key, signal) => d(request(`/api/content/${key}`, { signal })),
   settings: (signal) => d(request('/api/settings/public', { signal })),
 };
+// Admin-managed banner images. Public, uncached; the storefront falls back to its built-in layout when a slot is empty.
+export const bannersApi = {
+  all: (signal) => d(request('/api/banners', { signal })),
+};
 export const newsletterApi = {
   subscribe: (email, source = 'footer') => d(request('/api/newsletter', { method: 'POST', body: { email, source } })),
   confirm: (token) => d(request('/api/newsletter/confirm', { method: 'POST', body: { token } })),

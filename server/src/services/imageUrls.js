@@ -11,8 +11,13 @@ export const PRESETS = {
   card: [{ width: 720, crop: "limit" }, auto],
   detail: [{ width: 1600, crop: "limit" }, auto],
   cover: [{ width: 1400, crop: "limit" }, auto],
+  banner: [{ width: 2000, crop: "limit" }, auto],
 };
-export const RESPONSIVE_WIDTHS = { card: [360, 720], detail: [800, 1600] };
+export const RESPONSIVE_WIDTHS = {
+  card: [360, 720],
+  detail: [800, 1600],
+  banner: [640, 1280, 2000],
+};
 
 let cached;
 const settings = () => {
@@ -80,5 +85,18 @@ export function presentImage(img, preset, { keepPublicId = false } = {}) {
     ...rest,
     url: deliveryUrl({ url: rest.url, publicId }, preset),
     ...(keepPublicId && publicId ? { publicId } : {}),
+  };
+}
+
+// Storefront view of a banner: delivery URLs only, no storage internals. Returns undefined when the banner is absent or
+// switched off, so callers fall back to the built-in layout.
+export function presentBanner(b) {
+  if (!b?.url || b.active === false) return undefined;
+  const srcSet = deliverySrcSet(b, "banner");
+  return {
+    url: deliveryUrl(b, "banner"),
+    ...(srcSet ? { srcSet } : {}),
+    alt: b.alt ?? "",
+    ...(b.width && b.height ? { width: b.width, height: b.height } : {}),
   };
 }

@@ -5,6 +5,8 @@ import { siteOrigin, useSeo } from "../hooks/useSeo.js";
 import { useJsonLd } from "../hooks/useJsonLd.js";
 import { useSettings } from "../context/SettingsContext.jsx";
 import { useParallax } from "../hooks/useParallax.js";
+import { useBanners } from "../hooks/useBanners.js";
+import { BannerImage } from "../components/common/BannerImage.jsx";
 import { catalogApi } from "../services/catalog.js";
 import { contentApi, journalApi } from "../services/engage.js";
 import { excerptOf } from "../utils/richText.js";
@@ -40,7 +42,7 @@ const Head = ({ id, eyebrow, title, to, cta }) => (
   </div>
 );
 
-function Hero({ piece }) {
+function Hero({ piece, banner }) {
   const art = useRef(null);
   useParallax(art, 0.06);
   const img = piece?.images?.[0];
@@ -68,7 +70,16 @@ function Hero({ piece }) {
         </div>
       </div>
       <div className="bg-sand relative min-h-[50svh] overflow-hidden">
-        {img && (
+        {banner && (
+          <BannerImage
+            ref={art}
+            banner={banner}
+            priority
+            sizes="(min-width: 768px) 50vw, 100vw"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
+        {!banner && img && (
           <Link
             to={`/products/${piece.slug}`}
             aria-label={`${piece.name}, new this season`}
@@ -83,7 +94,7 @@ function Hero({ piece }) {
             />
           </Link>
         )}
-        {piece && (
+        {!banner && piece && (
           <p className="absolute left-6 bottom-5 eyebrow">New · {piece.name}</p>
         )}
       </div>
@@ -91,7 +102,7 @@ function Hero({ piece }) {
   );
 }
 
-function Departments() {
+function Departments({ images = {} }) {
   return (
     <section
       className="grid md:grid-cols-2 border-b rule"
@@ -103,27 +114,50 @@ function Departments() {
           "/men",
           "bg-paper",
           "Shirts, tailoring, outerwear and the quiet basics between.",
+          images.men,
         ],
         [
           "Womenswear",
           "/women",
           "bg-sand",
           "Dresses, knitwear and coats cut for movement.",
+          images.women,
         ],
-      ].map(([t, to, bg, blurb]) => (
+      ].map(([t, to, bg, blurb, banner]) => (
         <Link
           key={to}
           to={to}
-          className={`${bg} group px-[var(--gutter)] py-16 md:py-28 flex items-end justify-between border-b md:border-b-0 md:border-r rule last:border-r-0`}
+          className={`${bg} group relative overflow-hidden px-[var(--gutter)] py-16 md:py-28 flex items-end justify-between border-b md:border-b-0 md:border-r rule last:border-r-0 ${banner ? "text-paper" : ""}`}
         >
-          <span>
+          {banner && (
+            <>
+              <BannerImage
+                banner={banner}
+                sizes="(min-width: 768px) 50vw, 100vw"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              <span
+                aria-hidden="true"
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(to top, rgb(0 0 0 / 0.72), rgb(0 0 0 / 0.25))",
+                }}
+              />
+            </>
+          )}
+          <span className="relative">
             <span className="font-display text-4xl block">{t}</span>
-            <span className="mt-2 block text-muted max-w-xs">{blurb}</span>
+            <span
+              className={`mt-2 block max-w-xs ${banner ? "text-paper" : "text-muted"}`}
+            >
+              {blurb}
+            </span>
           </span>
           <ArrowIcon
             width={28}
             height={28}
-            className="transition-transform duration-[var(--duration-base)] group-hover:translate-x-2"
+            className="relative transition-transform duration-[var(--duration-base)] group-hover:translate-x-2"
           />
         </Link>
       ))}
@@ -131,9 +165,15 @@ function Departments() {
   );
 }
 
-function FeaturedCollection({ collection, items }) {
+function FeaturedCollection({ collection, items, banner }) {
   return (
     <Reveal as="section" className="mt-24 border-y rule" aria-labelledby="fc">
+      {banner && (
+        <BannerImage
+          banner={banner}
+          className="w-full aspect-[16/6] object-cover bg-sand border-b rule"
+        />
+      )}
       <div className="grid lg:grid-cols-[1fr_2fr]">
         <div className="wrap lg:!px-0 lg:pl-[var(--gutter)] lg:pr-12 py-12 lg:py-20 flex flex-col justify-center lg:border-r rule">
           <p className="eyebrow">
@@ -250,6 +290,7 @@ export default function Home() {
       "Premium contemporary fashion for men and women. Considered cloth, clean cut, quiet detail.",
   });
   const { settings } = useSettings();
+  const banners = useBanners();
   const origin = siteOrigin();
   useJsonLd("ld-site", {
     "@context": "https://schema.org",
@@ -304,8 +345,10 @@ export default function Home() {
 
   return (
     <>
-      <Hero piece={fresh.data?.items?.[0]} />
-      <Departments />
+      <Hero piece={fresh.data?.items?.[0]} banner={banners.site.homeHero} />
+      <Departments
+        images={{ men: banners.site.homeMen, women: banners.site.homeWomen }}
+      />
 
       <Reveal as="section" className="wrap pt-20" aria-labelledby="na">
         <Head id="na" title="New arrivals" to="/new-arrivals" cta="View all" />
@@ -334,7 +377,10 @@ export default function Home() {
       </Reveal>
 
       {col.data && col.data.items.length > 0 && (
-        <FeaturedCollection {...col.data} />
+        <FeaturedCollection
+          {...col.data}
+          banner={banners.collections[col.data.collection.slug]}
+        />
       )}
 
       {featured.data?.items.length > 0 && (

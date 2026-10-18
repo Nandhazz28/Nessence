@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { bannerSchema } from '../utils/bannerSchema.js';
 
 const categorySchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
@@ -6,6 +7,7 @@ const categorySchema = new mongoose.Schema({
   genders: { type: [String], enum: ['men', 'women'], default: ['men', 'women'] },
   description: String,
   sortOrder: { type: Number, default: 0 },
+  banner: bannerSchema,
   active: { type: Boolean, default: true, index: true },
 }, { timestamps: true });
 

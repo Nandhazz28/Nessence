@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAsync } from '../hooks/useAsync.js';
 import { useSeo } from '../hooks/useSeo.js';
 import { catalogApi } from '../services/catalog.js';
+import { useBanners } from '../hooks/useBanners.js';
+import { BannerImage } from '../components/common/BannerImage.jsx';
 import { ProductCard } from '../components/product/ProductCard.jsx';
 import { ErrorState, GridSkeleton, EmptyState } from '../components/common/States.jsx';
 
@@ -13,6 +15,8 @@ const CONFIG = {
   sale: { title: 'Sale', extra: { sale: 'true' }, blurb: 'Selected pieces at a reduced price.' },
   search: { title: 'Search', blurb: '' },
 };
+// Which site-wide banner slot belongs to which shop page (see SITE_SLOTS in the API).
+const PAGE_SLOT = { men: 'pageMen', women: 'pageWomen', 'new-arrivals': 'pageNewArrivals', sale: 'pageSale' };
 const csvOf = (v) => (v ? v.split(',').filter(Boolean) : []);
 
 function Filters({ facets, sp, set }) {
@@ -55,10 +59,13 @@ export default function Shop({ mode }) {
   const cats = useAsync((s) => catalogApi.categories(cfg.gender, s), [cfg.gender]);
   const list = useAsync((s) => catalogApi.list({ ...cfg.extra, gender: cfg.gender, category, ...f, q: q || undefined, sort: q && sort === 'featured' ? 'relevance' : sort, page, limit: 12 }, s), [mode, page, sort, category, q, f.size, f.color, f.minPrice, f.maxPrice, f.availability]);
   const pg = list.data?.pagination;
+  const banners = useBanners();
+  const banner = (category && banners.categories[category]) || banners.site[PAGE_SLOT[mode]]; // a chosen category's banner wins over the page banner
 
   return (
     <div className="wrap pt-10">
       <p className="eyebrow"><Link to="/">Home</Link> / {cfg.title}</p>
+      <BannerImage banner={banner} priority className="mt-6 w-full aspect-[16/5] object-cover bg-sand" />
       <h1 className="text-[length:var(--text-h1)] mt-3">{mode === 'search' ? (q ? `“${q}”` : 'Search') : cfg.title}</h1>
       {cfg.blurb && <p className="mt-3 text-muted max-w-lg">{cfg.blurb}</p>}
 

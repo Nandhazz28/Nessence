@@ -2,12 +2,15 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAsync } from '../hooks/useAsync.js';
 import { useSeo } from '../hooks/useSeo.js';
 import { catalogApi } from '../services/catalog.js';
+import { useBanners } from '../hooks/useBanners.js';
+import { BannerImage } from '../components/common/BannerImage.jsx';
 import { ProductCard } from '../components/product/ProductCard.jsx';
 import { EmptyState, ErrorState, GridSkeleton, Spinner } from '../components/common/States.jsx';
 
 export function Collections() {
   useSeo({ title: 'Collections', description: 'Seasonal Nessence collections for men and women.' });
   const { data, error, loading, reload } = useAsync((s) => catalogApi.collections(s), []);
+  const banners = useBanners();
   return (
     <div className="wrap py-14 md:py-20">
       <p className="eyebrow">Nessence</p>
@@ -22,6 +25,7 @@ export function Collections() {
             {data.map((c) => (
               <li key={c.slug} className="border-r border-b rule">
                 <Link to={`/collections/${c.slug}`} className="block p-8 md:p-12 min-h-64 group hover:bg-sand transition-colors">
+                  <BannerImage banner={banners.collections[c.slug]} sizes="(min-width: 768px) 50vw, 100vw" className="w-full aspect-[16/9] object-cover bg-sand mb-8" />
                   <p className="eyebrow">{[c.season, c.genders?.length === 1 ? (c.genders[0] === 'men' ? 'Men' : 'Women') : 'Men & Women'].filter(Boolean).join(' · ')}</p>
                   <h2 className="text-[length:var(--text-h2)] mt-4 group-hover:text-oxblood">{c.name}</h2>
                   {c.description && <p className="mt-3 text-muted max-w-sm">{c.description}</p>}
@@ -38,6 +42,7 @@ export function CollectionDetail() {
   const { slug } = useParams(); const [sp, setSp] = useSearchParams(); const page = Number(sp.get('page')) || 1;
   const col = useAsync((s) => catalogApi.collection(slug, s), [slug]);
   const list = useAsync((s) => catalogApi.list({ collection: slug, page, limit: 12 }, s), [slug, page]);
+  const banners = useBanners();
   useSeo({ title: col.data?.name ?? 'Collection', description: col.data?.description });
   if (col.loading) return <Spinner />;
   if (col.error?.status === 404) return <div className="wrap py-32 text-center"><h1 className="text-[length:var(--text-h2)]">This collection isn’t available</h1><Link to="/collections" className="btn btn-line mt-8">All collections</Link></div>;
@@ -46,6 +51,7 @@ export function CollectionDetail() {
   return (
     <div className="wrap pt-10">
       <p className="eyebrow"><Link to="/">Home</Link> / <Link to="/collections">Collections</Link> / {col.data.name}</p>
+      <BannerImage banner={banners.collections[slug]} priority className="mt-6 w-full aspect-[16/5] object-cover bg-sand" />
       <h1 className="text-[length:var(--text-h1)] mt-3">{col.data.name}</h1>
       {col.data.season && <p className="eyebrow mt-3">{col.data.season}</p>}
       {col.data.description && <p className="mt-3 text-muted max-w-lg">{col.data.description}</p>}

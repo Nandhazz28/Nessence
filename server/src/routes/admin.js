@@ -181,9 +181,10 @@ const upload = multer({
 const PURPOSE_PERMISSION = {
   product: "products:write",
   article: "content:write",
+  banner: "content:write",
 };
 const uploadQuery = z
-  .object({ purpose: z.enum(["product", "article"]).optional() })
+  .object({ purpose: z.enum(["product", "article", "banner"]).optional() })
   .strict(); // folder is chosen from an allowlist, never a client path
 admin.post(
   "/uploads/product-image",
@@ -389,6 +390,7 @@ for (const [path, Model, body, label] of [
         );
       const doc = await Model.findByIdAndDelete(req.params.id);
       if (!doc) throw ApiError.notFound("NOT_FOUND", `${label} not found`);
+      if (doc.banner?.url) await media.release([doc.banner.toObject()]); // the image goes with its owner
       await audit(req, {
         action: `${label}.deleted`,
         resource: label,

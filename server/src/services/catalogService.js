@@ -353,5 +353,6 @@ export async function getCollection(slug) {
     throw ApiError.notFound("COLLECTION_NOT_FOUND", "Collection not found");
   }
 
-  return c;
+  const { banner: _banner, ...rest } = c; // banners are served by /api/banners
+  return rest;
 }

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { ApiError } from "../../utils/ApiError.js";
 import { logger } from "../../config/logger.js";
 
-const SUBFOLDER = { product: "products", article: "journal" };
+const SUBFOLDER = { product: "products", article: "journal", banner: "banners" };
 const UPLOAD_FORMATS = ["jpg", "png", "webp"];
 const MAX_EDGE = 2400;
 

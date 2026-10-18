@@ -9,8 +9,8 @@ const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(
 const URL_OF = (id) => `https://res.cloudinary.com/democloud/image/upload/v1/${id}.jpg`;
 const silent = { error() {}, warn() {}, info() {} };
 
-function setup({ assets = [], products = [], articles = [], orders = [], returns = [] } = {}) {
-  const models = { MediaAsset: fakeModel(assets), Product: fakeModel(products), Article: fakeModel(articles), Order: fakeModel(orders), ReturnRequest: fakeModel(returns) };
+function setup({ assets = [], products = [], articles = [], orders = [], returns = [], categories = [], collections = [], siteContent = [] } = {}) {
+  const models = { MediaAsset: fakeModel(assets), Product: fakeModel(products), Article: fakeModel(articles), Order: fakeModel(orders), ReturnRequest: fakeModel(returns), Category: fakeModel(categories), Collection: fakeModel(collections), SiteContent: fakeModel(siteContent) };
   const log = { destroyed: [], legacyRemoved: [], uploadErr: null, destroyErr: null, n: 0 };
   const storage = {
     supportsRegistry: true,

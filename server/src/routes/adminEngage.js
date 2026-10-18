@@ -11,6 +11,7 @@ import * as news from '../services/engage/newsletterService.js';
 import * as contact from '../services/engage/contactService.js';
 import * as content from '../services/engage/contentService.js';
 import * as staff from '../services/engage/staffService.js';
+import * as bannerSvc from '../services/engage/bannerService.js';
 import { analytics } from '../services/engage/analytics.js';
 import { CONTENT_KEYS } from '../models/SiteContent.js';
 
@@ -59,6 +60,16 @@ adminEngage.delete('/journal/:id', need('content:write'), validate({ params: id 
 adminEngage.get('/content', need('content:write'), h(async (_req, res) => ok(res, await content.listPages())));
 adminEngage.put('/content/:key', need('content:write'), validate({ params: z.object({ key: z.enum(CONTENT_KEYS) }), body: content.contentUpdate }), h(async (req, res) => {
   const c = await content.updatePage(req.params.key, req.body, req.staff); await audit(req, { action: 'content.updated', resource: 'SiteContent', resourceId: req.params.key, metadata: { title: c.title } }); ok(res, { key: c.key, title: c.title });
+}));
+// Banners: every control (upload happens via POST /uploads/product-image?purpose=banner) is behind content:write.
+adminEngage.get('/banners', need('content:write'), h(async (_req, res) => ok(res, await bannerSvc.banners.list())));
+adminEngage.put('/banners/:scope/:ref', need('content:write'), validate({ params: bannerSvc.bannerParams, body: bannerSvc.bannerBody }), h(async (req, res) => {
+  const { scope, ref } = req.params; const r = await bannerSvc.banners.save(scope, ref, req.body, req.staff);
+  await audit(req, { action: 'banner.saved', resource: 'Banner', resourceId: `${scope}:${ref}`, metadata: { target: r.label, replaced: r.replaced, active: req.body.active } }); ok(res, r.banner);
+}));
+adminEngage.delete('/banners/:scope/:ref', need('content:write'), validate({ params: bannerSvc.bannerParams }), h(async (req, res) => {
+  const { scope, ref } = req.params; const r = await bannerSvc.banners.reset(scope, ref);
+  await audit(req, { action: 'banner.reset', resource: 'Banner', resourceId: `${scope}:${ref}`, metadata: { target: r.label, hadBanner: r.hadBanner } }); ok(res, { reset: true, hadBanner: r.hadBanner });
 }));
 adminEngage.get('/settings', need('settings:manage'), h(async (_req, res) => ok(res, await content.getSettings())));
 adminEngage.put('/settings', need('settings:manage'), validate({ body: content.settingsBody }), h(async (req, res) => { await content.saveSettings(req.body, req.staff); await audit(req, { action: 'settings.updated', resource: 'Settings', metadata: { storeName: req.body.storeName, social: Object.keys(req.body.social).filter((k) => req.body.social[k]) } }); ok(res, await content.getSettings()); }));
