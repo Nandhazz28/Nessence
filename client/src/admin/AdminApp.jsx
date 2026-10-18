@@ -5,7 +5,14 @@ import { api, authApi, AdminApiError, fieldErrors } from './api.js';
 import { Btn, Card, ErrorBox, Field, Loading, Note, ToastProvider } from './ui.jsx';
 
 const AdminCtx = createContext(null); export const useAdmin = () => useContext(AdminCtx);
-const page = (n, f) => lazy(() => f().then((m) => ({ default: m[n] })));
+const page = (n, f) => lazy(() => f().then((m) => {
+  const component = m?.[n];
+  if (!component) {
+    const names = Object.keys(m ?? {}).filter((k) => typeof m[k] === 'function' || typeof m[k] === 'object');
+    throw new Error(`Lazy import failed for "${n}". Module exports: ${names.join(', ') || 'none'}`);
+  }
+  return { default: component };
+}));
 const Dashboard = page('Dashboard', () => import('./pages/Dashboard.jsx'));
 const Analytics = page('Analytics', () => import('./pages/System.jsx')); const AuditLogs = page('AuditLogs', () => import('./pages/System.jsx'));
 const Products = page('Products', () => import('./pages/Products.jsx')); const ProductForm = page('ProductForm', () => import('./pages/Products.jsx'));
@@ -16,7 +23,7 @@ const Customers = page('Customers', () => import('./pages/People.jsx')); const C
 const Coupons = page('Coupons', () => import('./pages/Engage.jsx')); const Reviews = page('Reviews', () => import('./pages/Engage.jsx'));
 const Newsletter = page('Newsletter', () => import('./pages/Engage.jsx')); const Messages = page('Messages', () => import('./pages/Engage.jsx'));
 const Journal = page('Journal', () => import('./pages/Content.jsx')); const ArticleForm = page('ArticleForm', () => import('./pages/Content.jsx'));
-const Banners = page('Banners', () => import('./pages/Banners.jsx'));
+const Banners = lazy(() => import('./pages/Banners.jsx'));
 const Pages = page('Pages', () => import('./pages/Content.jsx')); const Settings = page('Settings', () => import('./pages/Content.jsx'));
 
 const NAV = [
@@ -74,7 +81,7 @@ function Shell({ children }) {
           <Btn size="sm" style={{ marginTop: 8 }} onClick={logout}>Sign out</Btn></div>
       </aside>
       <div className="a-main">
-        <div className="a-top"><Btn className="a-menu-btn" size="sm" aria-expanded={open} aria-label="Menu" onClick={() => setOpen((o) => !o)}>Menu</Btn><span style={{ color: 'var(--a-muted)' }}>Production</span>
+        <div className="a-top"><Btn className="a-menu-btn" size="sm" aria-expanded={open} aria-label="Menu" onClick={() => setOpen((o) => !o)}>Menu</Btn><span style={{ color: 'var(--a-muted)' }}>P[...]
           <Link to="/" target="_blank" rel="noreferrer">View storefront ↗</Link></div>
         <main className="a-page" id="main">{children}</main>
       </div>
