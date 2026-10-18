@@ -81,8 +81,10 @@ function Shell({ children }) {
           <Btn size="sm" style={{ marginTop: 8 }} onClick={logout}>Sign out</Btn></div>
       </aside>
       <div className="a-main">
-        <div className="a-top"><Btn className="a-menu-btn" size="sm" aria-expanded={open} aria-label="Menu" onClick={() => setOpen((o) => !o)}>Menu</Btn><span style={{ color: 'var(--a-muted)' }}>P[...]
-          <Link to="/" target="_blank" rel="noreferrer">View storefront ↗</Link></div>
+        <div className="a-top"><Btn className="a-menu-btn" size="sm" aria-expanded={open} aria-label="Menu" onClick={() => setOpen((o) => !o)}>Menu</Btn>
+          <span style={{ color: 'var(--a-muted)' }} aria-hidden="true" />
+          <Link to="/" target="_blank" rel="noreferrer">View storefront ↗</Link>
+        </div>
         <main className="a-page" id="main">{children}</main>
       </div>
     </div>
