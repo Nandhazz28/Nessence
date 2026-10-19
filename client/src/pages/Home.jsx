@@ -127,7 +127,7 @@ function Departments({ images = {} }) {
         <Link
           key={to}
           to={to}
-          className={`${bg} group relative overflow-hidden px-[var(--gutter)] py-16 md:py-28 flex items-end justify-between border-b md:border-b-0 md:border-r rule last:border-r-0 ${banner ? "text-paper" : ""}`}
+          className={`${bg} group relative overflow-hidden px-[var(--gutter)] py-16 md:py-28 flex items-end justify-between border-b md:border-b-0 md:border-r rule last:border-r-0 ${banner ? "tex...`}
         >
           {banner && (
             <>
@@ -308,10 +308,6 @@ export default function Home() {
   }, []);
   const journal = useAsync((s) => journalApi.list({ limit: 3 }, s), []);
   const about = useAsync((s) => contentApi.page("about", s), []);
-  const lookProducts = [
-    ...(fresh.data?.items ?? []),
-    ...(featured.data?.items ?? []),
-  ].filter((p, i, a) => a.findIndex((q) => q.id === p.id) === i);
 
   return (
     <>
@@ -388,8 +384,6 @@ export default function Home() {
           </ul>
         </Reveal>
       )}
-
-      <Lookbook products={lookProducts} />
 
       {about.data && (
         <Reveal
