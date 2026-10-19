@@ -253,36 +253,6 @@ function JournalStrip({ articles }) {
   );
 }
 
-function Lookbook({ products }) {
-  const shots = products.filter((p) => p.images?.[0]).slice(0, 5);
-  if (shots.length < 3) return null;
-  return (
-    <Reveal as="section" className="wrap mt-24" aria-labelledby="lb">
-      <Head id="lb" eyebrow="Lookbook" title="Worn together" />
-      <ul className="grid grid-cols-2 md:grid-cols-4 gap-3 md:grid-rows-2">
-        {shots.map((p, i) => (
-          <li key={p.id} className={i === 0 ? "col-span-2 md:row-span-2" : ""}>
-            <Link
-              to={`/products/${p.slug}`}
-              className="group block h-full relative bg-sand overflow-hidden"
-            >
-              <img
-                src={p.images[0].url}
-                alt=""
-                loading="lazy"
-                className={`w-full object-contain p-6 transition-transform duration-[var(--duration-slow)] group-hover:scale-[1.03] ${i === 0 ? "aspect-square md:aspect-auto md:h-full" : "aspect-[4/5]"}`}
-              />
-              <span className="absolute left-3 bottom-3 eyebrow !text-ink">
-                {p.name}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Reveal>
-  );
-}
-
 export default function Home() {
   useSeo({
     title: null,
