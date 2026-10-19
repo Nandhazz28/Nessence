@@ -127,7 +127,7 @@ function Departments({ images = {} }) {
         <Link
           key={to}
           to={to}
-          className={`${bg} group relative overflow-hidden px-[var(--gutter)] py-16 md:py-28 flex items-end justify-between border-b md:border-b-0 md:border-r rule last:border-r-0 ${banner ? "tex...`}
+          className={`${bg} group relative overflow-hidden px-[var(--gutter)] py-16 md:py-28 flex items-end justify-between border-b md:border-b-0 md:border-r rule last:border-r-0 ${banner ? "text-paper" : ""}`}
         >
           {banner && (
             <>
