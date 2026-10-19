@@ -13,21 +13,35 @@ import { isAllowedImageUrl, deliveryUrl } from '../imageUrls.js';
 
 const oid = z.string().regex(/^[a-f0-9]{24}$/, 'Invalid id');
 export const colorSpec = z.object({ name: z.string().trim().min(1).max(30), hex: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a #RRGGBB colour') });
-const image = z.object({ url: z.string().refine(isAllowedImageUrl, 'Upload images through the image uploader'), alt: z.string().trim().min(3).max(140), color: z.string().max(30).optional() });
+const image = z.object({ url: z.string().refine(isAllowedImageUrl, 'Upload images through the image uploader'), alt: z.string().trim().min(3, 'Describe the image in at least 3 characters').max(140), color: z.string().max(30).optional() });
+export const MAX_IMAGES = 20;
+// A gallery may not list the same picture twice (it would break ordering and the "replace" bookkeeping).
+const imageList = z.array(image).max(MAX_IMAGES).superRefine((list, ctx) => {
+  const seen = new Set();
+  list.forEach((im, i) => { if (seen.has(im.url)) ctx.addIssue({ code: 'custom', path: [i, 'url'], message: 'This image is already in the gallery' }); seen.add(im.url); });
+});
 export const variantsSpec = z.object({ colors: z.array(colorSpec).min(1).max(12), sizes: z.array(z.string().trim().min(1).max(10)).min(1).max(15), stock: z.number().int().min(0).max(100000).default(0), lowStockThreshold: z.number().int().min(0).max(1000).default(5) });
 
+// Field rules live here WITHOUT defaults. A PATCH must only touch the fields it sends: Zod applies .default() even through
+// .partial(), which used to make a partial update wipe the gallery, un-publish the product and clear its tags/collections.
+const productFields = {
+  name: z.string().trim().min(2).max(140), slug: z.string().regex(/^[a-z0-9-]{2,90}$/),
+  description: z.string().trim().min(10).max(4000), gender: z.enum(['men', 'women']), categoryId: oid, collectionIds: z.array(oid).max(10),
+  tags: z.array(z.string().trim().min(1).max(30)).max(20),
+  price: z.number().int().min(100), salePrice: z.number().int().min(100).nullable(),
+  materials: z.string().trim().max(300), care: z.array(z.string().trim().max(120)).max(10), details: z.array(z.string().trim().max(120)).max(10),
+  status: z.enum(['draft', 'published', 'archived']), featured: z.boolean(), newArrival: z.boolean(),
+  seo: z.object({ title: z.string().trim().max(70).optional(), description: z.string().trim().max(160).optional() }),
+  images: imageList,
+};
+const { slug, salePrice, materials, seo, ...withDefaults } = productFields;
 export const productBody = z.object({
-  name: z.string().trim().min(2).max(140), slug: z.string().regex(/^[a-z0-9-]{2,90}$/).optional(),
-  description: z.string().trim().min(10).max(4000), gender: z.enum(['men', 'women']), categoryId: oid, collectionIds: z.array(oid).max(10).default([]),
-  tags: z.array(z.string().trim().min(1).max(30)).max(20).default([]),
-  price: z.number().int().min(100), salePrice: z.number().int().min(100).nullable().optional(),
-  materials: z.string().trim().max(300).optional(), care: z.array(z.string().trim().max(120)).max(10).default([]), details: z.array(z.string().trim().max(120)).max(10).default([]),
-  status: z.enum(['draft', 'published', 'archived']).default('draft'), featured: z.boolean().default(false), newArrival: z.boolean().default(false),
-  seo: z.object({ title: z.string().trim().max(70).optional(), description: z.string().trim().max(160).optional() }).optional(),
-  images: z.array(image).max(20).default([]),
+  ...withDefaults, slug: slug.optional(), salePrice: salePrice.optional(), materials: materials.optional(), seo: seo.optional(),
+  collectionIds: productFields.collectionIds.default([]), tags: productFields.tags.default([]), care: productFields.care.default([]), details: productFields.details.default([]),
+  status: productFields.status.default('draft'), featured: productFields.featured.default(false), newArrival: productFields.newArrival.default(false), images: productFields.images.default([]),
 }).strict();
 export const createBody = productBody.extend({ variants: variantsSpec.optional() }).strict();
-export const updateBody = productBody.partial().strict();
+export const updateBody = z.object(productFields).partial().strict();
 
 const uniqueSlug = async (base, ignoreId) => {
   let slug = slugify(base) || 'product'; let n = 1;
@@ -41,6 +55,19 @@ async function assertRefs(categoryId, collectionIds = []) {
 async function assertPublishable(product) {
   if (!product.images.length) throw ApiError.badRequest('NOT_PUBLISHABLE', 'Add at least one image before publishing');
   if (!(await ProductVariant.exists({ product: product._id, active: true }))) throw ApiError.badRequest('NOT_PUBLISHABLE', 'Add at least one colour/size variant before publishing');
+}
+// Images may be tied to a colour so the storefront gallery can follow the colour picker. The colour must be one the product
+// actually has. Legacy images keep whatever colour they already carry (backward compatible), so only NEW or CHANGED colours are checked.
+function assertImageColors(images, colorNames, existing = []) {
+  if (!colorNames.length) return; // no variants yet (e.g. a draft): nothing to check against
+  const allowed = new Set(colorNames); const before = new Map(existing.map((e) => [e.url, e.color ?? '']));
+  const details = [];
+  images.forEach((im, i) => {
+    if (!im.color || allowed.has(im.color)) return;
+    if (before.has(im.url) && before.get(im.url) === im.color) return;
+    details.push({ field: `images.${i}.color`, message: `"${im.color}" is not one of this product's colours (${colorNames.join(', ')})` });
+  });
+  if (details.length) throw ApiError.badRequest('INVALID_IMAGE_COLOR', 'Please check the highlighted fields', details);
 }
 const toDoc = (b) => ({
   ...(b.name !== undefined && { name: b.name }), ...(b.description !== undefined && { description: b.description }), ...(b.gender && { gender: b.gender }),
@@ -70,7 +97,8 @@ export async function createProduct(body) {
   await assertRefs(body.categoryId, body.collectionIds);
   const { variants, ...rest } = body;
   const slug = await uniqueSlug(body.slug ?? body.name);
-  const images = await media.resolveImages(rest.images ?? []); 
+  assertImageColors(rest.images ?? [], (variants?.colors ?? []).map((c) => c.name));
+  const images = await media.resolveImages(rest.images ?? []);
   const product = new Product({ ...toDoc({ ...rest, images, status: 'draft' }), slug });
   await product.save();
   await media.markAttached(images);
@@ -85,6 +113,10 @@ export async function updateProduct(id, body) {
   await assertRefs(body.categoryId, body.collectionIds);
   const before = { price: product.price, salePrice: product.salePrice, status: product.status };
   const oldImages = product.images.map((i) => i.toObject());
+  if (body.images) {
+    assertImageColors(body.images, await ProductVariant.distinct('color.name', { product: product._id }), oldImages);
+    if (!body.images.length && (body.status ?? product.status) === 'published') throw ApiError.badRequest('LAST_IMAGE', 'A published product needs at least one image. Archive or unpublish it first.');
+  }
   const images = body.images ? await media.resolveImages(body.images, { existing: oldImages }) : undefined;
   if (images) body = { ...body, images };
   if (body.slug && body.slug !== product.slug) product.slug = await uniqueSlug(body.slug, product._id);
@@ -122,7 +154,8 @@ export async function getProduct(id) {
   if (!p) throw ApiError.notFound('PRODUCT_NOT_FOUND', 'Product not found');
   const [variants, inv] = await Promise.all([ProductVariant.find({ product: id }).lean(), Inventory.find({ product: id }).lean()]);
   const im = new Map(inv.map((i) => [String(i.variant), i]));
-  return { ...p, id: p._id, variants: variants.map((v) => ({ id: v._id, sku: v.sku, color: v.color, size: v.size, active: v.active, stock: im.get(String(v._id))?.stock ?? 0, reserved: im.get(String(v._id))?.reserved ?? 0, lowStockThreshold: im.get(String(v._id))?.lowStockThreshold ?? 5 })) };
+  const images = [...(p.images ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((i) => ({ id: i._id, url: i.url, thumb: deliveryUrl(i, 'thumb'), alt: i.alt, color: i.color, order: i.order ?? 0 }));
+  return { ...p, images, id: p._id, variants: variants.map((v) => ({ id: v._id, sku: v.sku, color: v.color, size: v.size, active: v.active, stock: im.get(String(v._id))?.stock ?? 0, reserved: im.get(String(v._id))?.reserved ?? 0, lowStockThreshold: im.get(String(v._id))?.lowStockThreshold ?? 5 })) };
 }
 
 export const addProductVariants = async (id, spec) => {

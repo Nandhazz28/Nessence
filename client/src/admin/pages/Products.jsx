@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAsync } from '../../hooks/useAsync.js';
 import { api, get, send, fieldErrors } from '../api.js';
-import { Badge, Btn, Card, Confirm, ErrorBox, Field, ListCard, Loading, Modal, Note, PageHead, SearchBox, money, useAction, useList } from '../ui.jsx';
+import { Badge, Btn, Card, Confirm, ErrorBox, Field, ListCard, Loading, Modal, Note, PageHead, SearchBox, money, useAction, useList, useToast } from '../ui.jsx';
+import { ProductImages, fromServer, imagesDirty, isSendable, serialize, validateImages } from '../ProductImages.jsx';
 
 export function Products() {
   const nav = useNavigate(); const list = useList('/products', { limit: 20 });
@@ -23,7 +24,7 @@ export function Products() {
 const rupees = (p) => (p == null ? '' : String(p / 100));
 const toPaise = (v) => (v === '' || v == null ? null : Math.round(parseFloat(v) * 100));
 const lines = (s) => s.split('\n').map((x) => x.trim()).filter(Boolean);
-const blank = { name: '', description: '', gender: 'women', categoryId: '', collectionIds: [], price: '', salePrice: '', tags: '', materials: '', care: '', details: '', status: 'draft', featured: false, newArrival: false, seoTitle: '', seoDescription: '', images: [] };
+const blank = { name: '', description: '', gender: 'women', categoryId: '', collectionIds: [], price: '', salePrice: '', tags: '', materials: '', care: '', details: '', status: 'draft', featured: false, newArrival: false, seoTitle: '', seoDescription: '' };
 
 function VariantAdder({ onAdd, onChange, busy }) {
   const [colors, setColors] = useState([{ name: '', hex: '#181510' }]); const [sizes, setSizes] = useState('XS, S, M, L, XL'); const [stock, setStock] = useState(0);
@@ -42,35 +43,47 @@ function VariantAdder({ onAdd, onChange, busy }) {
 }
 
 export function ProductForm() {
-  const { id } = useParams(); const editing = Boolean(id); const nav = useNavigate(); const act = useAction();
+  const { id } = useParams(); const editing = Boolean(id); const nav = useNavigate(); const act = useAction(); const toast = useToast();
   const taxo = useAsync(async () => { const [c, o] = await Promise.all([get('/categories'), get('/collections')]); return { cats: c.data, cols: o.data }; }, []);
   const prod = useAsync(() => (editing ? get(`/products/${id}`).then((r) => r.data) : Promise.resolve(null)), [id]);
-  const [f, setF] = useState(blank); const [errs, setErrs] = useState({}); const [top, setTop] = useState(''); const [busy, setBusy] = useState(false); const [uploading, setUploading] = useState(false);
+  const [f, setF] = useState(blank); const [errs, setErrs] = useState({}); const [top, setTop] = useState(''); const [busy, setBusy] = useState(false);
   const [newVariants, setNewVariants] = useState(null); const [addOpen, setAddOpen] = useState(false); const [addBusy, setAddBusy] = useState(false);
+  const [imgs, setImgs] = useState([]); const [imgBase, setImgBase] = useState([]); const imgBaseRef = useRef([]); const [imgErrs, setImgErrs] = useState({}); const [imgTop, setImgTop] = useState(''); const [imgSaving, setImgSaving] = useState(false);
   const p = prod.data;
   useEffect(() => { if (p) setF({ name: p.name, description: p.description, gender: p.gender, categoryId: p.category, collectionIds: (p.collections ?? []).map(String), price: rupees(p.price), salePrice: rupees(p.salePrice), tags: (p.tags ?? []).join(', '), materials: p.materials ?? '', care: (p.care ?? []).join('\n'), details: (p.details ?? []).join('\n'),
-    status: p.status, featured: p.featured, newArrival: Boolean(p.newArrivalUntil && new Date(p.newArrivalUntil) > new Date()), seoTitle: p.seo?.title ?? '', seoDescription: p.seo?.description ?? '', images: [...(p.images ?? [])].sort((a, b) => a.order - b.order).map((i) => ({ url: i.url, alt: i.alt, color: i.color ?? '' })) }); }, [p]);
+    status: p.status, featured: p.featured, newArrival: Boolean(p.newArrivalUntil && new Date(p.newArrivalUntil) > new Date()), seoTitle: p.seo?.title ?? '', seoDescription: p.seo?.description ?? '' }); }, [p]);
+  // Images follow the server, except that unsaved image work (new uploads, reordering…) survives a reload triggered by something else, e.g. toggling a variant.
+  useEffect(() => { if (!p) return; const items = fromServer(p.images); const prevBase = imgBaseRef.current; setImgs((cur) => (imagesDirty(cur, prevBase) ? cur : items)); imgBaseRef.current = items; setImgBase(items); }, [p]);
+  const imgDirty = imagesDirty(imgs, imgBase);
+  useEffect(() => { if (!imgDirty) return undefined; const warn = (e) => { e.preventDefault(); e.returnValue = ''; }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [imgDirty]);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
   const colorsAvail = useMemo(() => [...new Set((p?.variants ?? []).map((v) => v.color.name))], [p]);
+  const imageColors = useMemo(() => (editing ? colorsAvail : [...new Set((newVariants?.colors ?? []).map((c) => c.name))]), [editing, colorsAvail, newVariants]);
   if (taxo.loading || prod.loading) return <Loading />; if (taxo.error || prod.error) return <ErrorBox error={taxo.error ?? prod.error} />;
 
-  const upload = async (files) => {
-    setUploading(true);
-    for (const file of files) { const form = new FormData(); form.append('file', file); const r = await act(() => api('/uploads/product-image', { method: 'POST', form })); if (r?.data) setF((x) => ({ ...x, images: [...x.images, { url: r.data.url, alt: f.name ? `${f.name}` : '', color: '' }] })); }
-    setUploading(false);
+  const imageErrors = (errs) => { const sendable = imgs.filter(isSendable); const out = {}; for (const [k, v] of Object.entries(errs)) { const m = /^images\.(\d+)\.(url|alt|color)$/.exec(k); if (m && sendable[Number(m[1])]) out[sendable[Number(m[1])].key] = v; } return out; };
+  const checkImages = () => { const v = validateImages(imgs, { published: f.status === 'published' }); setImgErrs(v.errors); setImgTop(v.summary); return v.ok; };
+  const adoptImages = (list) => { const items = fromServer(list); imgBaseRef.current = items; setImgBase(items); setImgs(items); setImgErrs({}); setImgTop(''); };
+  const saveImages = async () => {
+    if (!checkImages()) return;
+    setImgSaving(true);
+    try { const r = await send('PATCH', `/products/${id}`, { images: serialize(imgs) }); adoptImages(r.data.images); toast('Images saved'); }
+    catch (x) { setImgErrs(imageErrors(fieldErrors(x))); setImgTop(x.details?.length ? 'Please fix the highlighted images.' : x.message); }
+    finally { setImgSaving(false); }
   };
-  const move = (i, d) => setF((x) => { const a = [...x.images]; const j = i + d; if (j < 0 || j >= a.length) return x; [a[i], a[j]] = [a[j], a[i]]; return { ...x, images: a }; });
   const body = () => ({ name: f.name, description: f.description, gender: f.gender, categoryId: f.categoryId, collectionIds: f.collectionIds, tags: f.tags.split(',').map((t) => t.trim()).filter(Boolean),
     price: toPaise(f.price), salePrice: f.salePrice === '' ? null : toPaise(f.salePrice), materials: f.materials || undefined, care: lines(f.care), details: lines(f.details), status: f.status, featured: f.featured, newArrival: f.newArrival,
-    seo: { title: f.seoTitle || undefined, description: f.seoDescription || undefined }, images: f.images.map((i) => ({ url: i.url, alt: i.alt, ...(i.color ? { color: i.color } : {}) })) });
+    seo: { title: f.seoTitle || undefined, description: f.seoDescription || undefined }, images: serialize(imgs) });
   const save = async (e) => {
-    e.preventDefault(); setBusy(true); setErrs({}); setTop('');
+    e.preventDefault(); setErrs({}); setTop('');
+    if (!checkImages()) { setTop('Please fix the images before saving.'); return; }
+    setBusy(true);
     try {
       let payload = body();
       if (!editing && newVariants?.colors.length && newVariants?.sizes.length) payload.variants = newVariants; // optional on create
       const r = editing ? await send('PATCH', `/products/${id}`, payload) : await send('POST', '/products', payload);
-      if (editing) { prod.reload(); setBusy(false); } else nav(`/admin/products/${r.data.id ?? r.data._id}/edit`, { replace: true });
-    } catch (x) { setErrs(fieldErrors(x)); setTop(x.details?.length ? 'Please fix the highlighted fields.' : x.message); setBusy(false); }
+      if (editing) { adoptImages(r.data.images); prod.reload(); setBusy(false); } else nav(`/admin/products/${r.data.id ?? r.data._id}/edit`, { replace: true });
+    } catch (x) { setErrs(fieldErrors(x)); setImgErrs(imageErrors(fieldErrors(x))); setTop(x.details?.length ? 'Please fix the highlighted fields.' : x.message); setBusy(false); }
   };
   const fe = (k) => errs[k];
   return (
@@ -95,15 +108,9 @@ export function ProductForm() {
             <div className="a-row"><Field label="Price (₹)" type="number" min="1" step="0.01" value={f.price} onChange={set('price')} error={fe('price')} required />
               <Field label="Sale price (₹)" type="number" min="1" step="0.01" value={f.salePrice} onChange={set('salePrice')} error={fe('salePrice')} hint="Leave empty for no sale. Must be lower than price." /></div>
           </Card>
-          <Card title="Images" actions={<label className="a-btn sm" style={{ cursor: 'pointer' }}>{uploading ? 'Uploading…' : 'Upload images'}<input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden disabled={uploading} onChange={(e) => { upload([...e.target.files]); e.target.value = ''; }} /></label>}>
+          <Card title="Images">
             {fe('images') && <div className="a-err">{fe('images')}</div>}
-            {f.images.length === 0 ? <div className="a-empty">No images yet. JPEG, PNG or WebP up to 5 MB. The first image is the primary one.</div> : (
-              <div className="a-imgs">{f.images.map((im, i) => (
-                <div key={im.url} className="a-img"><img src={im.url} alt="" />
-                  <input className="a-input" style={{ marginTop: 6 }} aria-label={`Alt text for image ${i + 1}`} placeholder="Alt text" value={im.alt} onChange={(e) => setF((x) => ({ ...x, images: x.images.map((m, j) => (j === i ? { ...m, alt: e.target.value } : m)) }))} />
-                  <input className="a-input" style={{ marginTop: 6 }} aria-label={`Colour for image ${i + 1}`} list="colors" placeholder="Colour (optional)" value={im.color} onChange={(e) => setF((x) => ({ ...x, images: x.images.map((m, j) => (j === i ? { ...m, color: e.target.value } : m)) }))} />
-                  <div className="a-actions" style={{ marginTop: 6 }}><Btn size="sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move earlier">←</Btn><Btn size="sm" disabled={i === f.images.length - 1} onClick={() => move(i, 1)} aria-label="Move later">→</Btn><Btn size="sm" kind="danger" onClick={() => setF((x) => ({ ...x, images: x.images.filter((_, j) => j !== i) }))}>Remove</Btn></div></div>))}</div>)}
-            <datalist id="colors">{colorsAvail.map((c) => <option key={c} value={c} />)}</datalist>
+            <ProductImages images={imgs} setImages={setImgs} baseline={imgBase} colors={imageColors} productName={f.name} mode={editing ? 'edit' : 'create'} errors={imgErrs} summary={imgTop} saving={imgSaving} onSave={saveImages} />
           </Card>
           <Card title="Materials, care & details">
             <Field label="Materials" value={f.materials} onChange={set('materials')} />

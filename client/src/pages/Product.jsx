@@ -37,7 +37,8 @@ function Detail({ p }) {
   useEffect(() => { setShot(0); }, [color]);
   useSeo({ title: p.seo?.title || p.name, description: p.seo?.description || excerptOf(p.description), image: p.images[0]?.url, type: 'product' });
 
-  const shots = useMemo(() => p.images.filter((i) => !i.color || i.color === color), [p.images, color]);
+  // Colour-specific shots plus the shared ones; if the chosen colour has none at all, show the whole gallery rather than a blank frame.
+  const shots = useMemo(() => { const own = p.images.filter((i) => !i.color || i.color === color); return own.length ? own : p.images; }, [p.images, color]);
   const sel = p.variants.find((v) => v.color.name === color && v.size === size);
   useJsonLd('ld-breadcrumb', { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
     ['Home', '/'], [p.gender === 'men' ? 'Men' : 'Women', `/${p.gender}`], ...(p.category ? [[p.category.name, `/${p.gender}?category=${p.category.slug}`]] : []), [p.name, `/products/${p.slug}`],

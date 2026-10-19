@@ -372,6 +372,8 @@ export function Confirm({
   danger,
   onConfirm,
   children,
+  triggerLabel,
+  disabled,
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -393,6 +395,8 @@ export function Confirm({
       <Btn
         kind={danger ? "danger" : ""}
         size="sm"
+        disabled={disabled}
+        aria-label={triggerLabel}
         onClick={() => setOpen(true)}
       >
         {trigger}
